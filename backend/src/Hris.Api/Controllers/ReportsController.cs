@@ -298,28 +298,35 @@ public class ReportsController(HrisDbContext db) : ControllerBase
 
     [HttpGet("employees")]
     [Authorize(Roles = EmployeeReportRoles)]
-    public async Task<IActionResult> Employees([FromQuery] string? format)
+    public async Task<IActionResult> Employees([FromQuery] string? format, [FromQuery] int page = 1, [FromQuery] int pageSize = 25)
     {
-        var rows = await db.Employees.Include(e => e.Department).Include(e => e.Position).Include(e => e.Branch)
+        var q = db.Employees.Include(e => e.Department).Include(e => e.Position).Include(e => e.Branch)
             .OrderBy(e => e.EmployeeCode)
             .Select(e => new
             {
                 e.EmployeeCode,
-                Name = e.FirstName + " " + e.LastName,
-                Department = e.Department!.Name, Position = e.Position!.Title, Branch = e.Branch!.Name,
-                Status = e.Status.ToString(), e.HireDate, e.MonthlySalary,
+                name = e.FirstName + " " + e.LastName,
+                department = e.Department!.Name, position = e.Position!.Title, branch = e.Branch!.Name,
+                status = e.Status.ToString(), hireDate = e.HireDate, monthlySalary = e.MonthlySalary,
                 e.SssNumber, e.PhilHealthNumber, e.PagIbigNumber, e.Tin
-            }).ToListAsync();
+            });
 
-        return format == "csv"
-            ? Csv("employee-masterlist", rows.Select(r => new Dictionary<string, object?>
-              {
-                  ["Employee Code"] = r.EmployeeCode, ["Name"] = r.Name, ["Department"] = r.Department,
-                  ["Position"] = r.Position, ["Branch"] = r.Branch, ["Status"] = r.Status,
-                  ["Hire Date"] = r.HireDate.ToString("yyyy-MM-dd"), ["Monthly Salary"] = r.MonthlySalary,
-                  ["SSS"] = r.SssNumber, ["PhilHealth"] = r.PhilHealthNumber, ["Pag-IBIG"] = r.PagIbigNumber, ["TIN"] = r.Tin
-              }))
-            : Ok(rows);
+        if (format == "csv")
+        {
+            var rows = await q.ToListAsync();
+            return Csv("employee-masterlist", rows.Select(r => new Dictionary<string, object?>
+            {
+                ["Employee Code"] = r.EmployeeCode, ["Name"] = r.name, ["Department"] = r.department,
+                ["Position"] = r.position, ["Branch"] = r.branch, ["Status"] = r.status,
+                ["Hire Date"] = r.hireDate.ToString("yyyy-MM-dd"), ["Monthly Salary"] = r.monthlySalary,
+                ["SSS"] = r.SssNumber, ["PhilHealth"] = r.PhilHealthNumber, ["Pag-IBIG"] = r.PagIbigNumber, ["TIN"] = r.Tin
+            }));
+        }
+
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var total = await q.CountAsync();
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        return Ok(new { total, page, pageSize, items });
     }
 
     [HttpGet("government")]

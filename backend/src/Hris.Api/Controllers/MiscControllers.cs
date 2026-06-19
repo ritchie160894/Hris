@@ -30,12 +30,12 @@ public class GovernmentController(HrisDbContext db) : ControllerBase
     /// <summary>Monthly remittance summary per agency from finalized payslips.</summary>
     [HttpGet("remittance")]
     [Authorize(Roles = $"{nameof(UserRole.SuperAdministrator)},{nameof(UserRole.HrAdministrator)},{nameof(UserRole.PayrollOfficer)}")]
-    public async Task<IActionResult> Remittance([FromQuery] int year, [FromQuery] int month)
+    public async Task<IActionResult> Remittance([FromQuery] int year, [FromQuery] int month, [FromQuery] int page = 1, [FromQuery] int pageSize = 25)
     {
         var first = new DateOnly(year, month, 1);
         var last = first.AddMonths(1).AddDays(-1);
         var execIds = await ExecutiveExemption.GetExemptEmployeeIdsAsync(db);
-        var rows = await db.Payslips.AsNoTracking()
+        var q = db.Payslips.AsNoTracking()
             .Where(p => !execIds.Contains(p.EmployeeId))
             .Where(p => p.PayrollCutoff != null
                 && p.PayrollCutoff.PeriodStart >= first
@@ -55,9 +55,12 @@ public class GovernmentController(HrisDbContext db) : ControllerBase
                 pagIbig = g.Sum(p => p.PagIbigEmployee + p.PagIbigEmployer),
                 tax = g.Sum(p => p.WithholdingTax)
             })
-            .OrderBy(r => r.EmployeeCode)
-            .ToListAsync();
-        return Ok(rows);
+            .OrderBy(r => r.EmployeeCode);
+
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var total = await q.CountAsync();
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        return Ok(new { total, page, pageSize, items });
     }
 }
 
@@ -643,18 +646,23 @@ public class AuditController(HrisDbContext db) : ControllerBase
 public class DocumentsController(HrisDbContext db, IWebHostEnvironment env, AuditService audit) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> List([FromQuery] int? employeeId, [FromQuery] string? category)
+    public async Task<IActionResult> List([FromQuery] int? employeeId, [FromQuery] string? category, [FromQuery] int page = 1, [FromQuery] int pageSize = 25)
     {
         var q = db.EmployeeDocuments.Include(d => d.Employee).AsQueryable();
         if (User.Role() == UserRole.Employee) q = q.Where(d => d.EmployeeId == User.EmployeeId());
         else if (employeeId.HasValue) q = q.Where(d => d.EmployeeId == employeeId);
         if (!string.IsNullOrEmpty(category) && Enum.TryParse<DocumentCategory>(category, out var cat)) q = q.Where(d => d.Category == cat);
-        return Ok(await q.OrderByDescending(d => d.CreatedAt)
+
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var total = await q.CountAsync();
+        var items = await q.OrderByDescending(d => d.CreatedAt)
+            .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(d => new
             {
                 d.Id, category = d.Category.ToString(), d.Title, d.FileName, d.FileSize, d.ExpiryDate, d.Notes, d.CreatedAt,
                 employee = new { d.Employee!.Id, d.Employee.EmployeeCode, name = d.Employee.FirstName + " " + d.Employee.LastName }
-            }).ToListAsync());
+            }).ToListAsync();
+        return Ok(new { total, page, pageSize, items });
     }
 
     [HttpPost("upload")]

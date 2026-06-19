@@ -29,12 +29,12 @@ import { AuthService } from '../core/auth.service';
       @if (tab() === 'daily') {
         <div class="card">
           <div class="row mb">
-            <input class="ctl" style="max-width:180px" type="date" [(ngModel)]="date" (change)="loadDaily()" />
+            <input class="ctl" style="max-width:180px" type="date" [(ngModel)]="date" (change)="dailyPage.set(1); loadDaily()" />
             <div class="spacer"></div>
-            <span class="badge present">Present: {{ countStatus('Present') }}</span>
-            <span class="badge late">Late: {{ countStatus('Late') }}</span>
-            <span class="badge onleave">On Leave: {{ countStatus('On Leave') }}</span>
-            <span class="badge absent">Absent: {{ countStatus('Absent') }}</span>
+            <span class="badge present">Present: {{ dailyCounts().present }}</span>
+            <span class="badge late">Late: {{ dailyCounts().late }}</span>
+            <span class="badge onleave">On Leave: {{ dailyCounts().onLeave }}</span>
+            <span class="badge absent">Absent: {{ dailyCounts().absent }}</span>
           </div>
           <div class="table-wrap">
             <table class="data">
@@ -54,6 +54,13 @@ import { AuthService } from '../core/auth.service';
               </tbody>
             </table>
           </div>
+          @if (dailyTotal() > dailyPageSize) {
+            <div class="row mt">
+              <button class="btn secondary sm" [disabled]="dailyPage() <= 1" (click)="dailyPage.set(dailyPage() - 1); loadDaily()">← Prev</button>
+              <span class="muted small">Page {{ dailyPage() }} of {{ dailyTotalPages() }} · {{ dailyTotal() }} employee(s)</span>
+              <button class="btn secondary sm" [disabled]="dailyPage() >= dailyTotalPages()" (click)="dailyPage.set(dailyPage() + 1); loadDaily()">Next →</button>
+            </div>
+          }
         </div>
       }
 
@@ -233,6 +240,10 @@ export class AttendanceComponent implements OnInit {
   logFrom = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
   logTo = new Date().toISOString().slice(0, 10);
   daily = signal<any[]>([]);
+  dailyTotal = signal(0);
+  dailyPage = signal(1);
+  readonly dailyPageSize = 25;
+  dailyCounts = signal({ present: 0, late: 0, onLeave: 0, absent: 0 });
   logDays = signal<any[]>([]);
   logTotal = signal(0);
   logPage = signal(1);
@@ -260,8 +271,16 @@ export class AttendanceComponent implements OnInit {
   ngOnInit(): void { this.loadDaily(); }
 
   loadDaily(): void {
-    this.api.get<any[]>('attendance/daily-summary', { date: this.date }).subscribe(r => this.daily.set(r));
+    this.api.get<{ total: number; items: any[]; counts?: { present: number; late: number; onLeave: number; absent: number } }>(
+      'attendance/daily-summary', { date: this.date, page: this.dailyPage(), pageSize: this.dailyPageSize }
+    ).subscribe(r => {
+      this.daily.set(r.items ?? []);
+      this.dailyTotal.set(r.total ?? 0);
+      if (r.counts) this.dailyCounts.set(r.counts);
+    });
   }
+
+  dailyTotalPages(): number { return Math.max(1, Math.ceil(this.dailyTotal() / this.dailyPageSize)); }
 
   loadLogs(): void {
     this.api.get<{ total: number; items: any[] }>('attendance/logs/by-day', {
@@ -281,8 +300,6 @@ export class AttendanceComponent implements OnInit {
   }
 
   correctionTotalPages(): number { return Math.max(1, Math.ceil(this.correctionTotal() / this.correctionPageSize)); }
-
-  countStatus(s: string): number { return this.daily().filter(r => r.status === s).length; }
 
   saveManual(): void {
     this.error.set('');

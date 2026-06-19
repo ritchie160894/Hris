@@ -92,6 +92,13 @@ import { AuthService } from '../core/auth.service';
               </tbody>
             </table>
           </div>
+          @if (corrTotal() > pageSize) {
+            <div class="pagination">
+              <span>Page {{ corrPage() }} of {{ corrTotalPages() }} · {{ corrTotal() }} record(s) · {{ pageSize }} rows/page</span>
+              <button class="btn secondary sm" [disabled]="corrPage() <= 1" (click)="corrPage.set(corrPage() - 1); loadCorrections()">Previous</button>
+              <button class="btn secondary sm" [disabled]="corrPage() >= corrTotalPages()" (click)="corrPage.set(corrPage() + 1); loadCorrections()">Next</button>
+            </div>
+          }
         </div>
       }
 
@@ -153,6 +160,8 @@ export class OvertimeComponent implements OnInit {
   tab = signal('requests');
   items = signal<any[]>([]);
   corrections = signal<any[]>([]);
+  corrPage = signal(1);
+  corrTotal = signal(0);
   page = signal(1);
   total = signal(0);
   readonly pageSize = 25;
@@ -216,9 +225,15 @@ export class OvertimeComponent implements OnInit {
   }
 
   loadCorrections(): void {
-    this.api.get<{ total: number; items: any[] }>('overtime/corrections', { page: 1, pageSize: 50 })
-      .subscribe(r => this.corrections.set(r.items));
+    this.api.get<{ total: number; items: any[] }>('overtime/corrections', {
+      page: this.corrPage(), pageSize: this.pageSize
+    }).subscribe(r => {
+      this.corrections.set(r.items);
+      this.corrTotal.set(r.total);
+    });
   }
+
+  corrTotalPages(): number { return Math.max(1, Math.ceil(this.corrTotal() / this.pageSize)); }
 
   openOtCorrection(): void {
     this.error.set('');

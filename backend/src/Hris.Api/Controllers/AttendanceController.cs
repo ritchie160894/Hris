@@ -158,7 +158,9 @@ public class AttendanceController(HrisDbContext db, AuditService audit, Approval
 
     /// <summary>Daily summary per employee — reads pre-aggregated AttendanceDailySummaries (fast at scale).</summary>
     [HttpGet("daily-summary")]
-    public async Task<IActionResult> DailySummary([FromQuery] DateOnly date, [FromQuery] int? departmentId)
+    public async Task<IActionResult> DailySummary(
+        [FromQuery] DateOnly date, [FromQuery] int? departmentId,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 25)
     {
         var execIds = await ExecutiveExemption.GetExemptEmployeeIdsAsync(db);
 
@@ -172,7 +174,7 @@ public class AttendanceController(HrisDbContext db, AuditService audit, Approval
             employeesQ = employeesQ.Where(e => e.DepartmentId == me.Employee!.DepartmentId);
         }
 
-        var employees = await employeesQ.Include(e => e.Department).ToListAsync();
+        var employees = await employeesQ.Include(e => e.Department).OrderBy(e => e.EmployeeCode).ToListAsync();
         var employeeIds = employees.Select(e => e.Id).ToList();
         await summaries.EnsureRangeAsync(date, date, employeeIds);
 
@@ -197,8 +199,20 @@ public class AttendanceController(HrisDbContext db, AuditService audit, Approval
                 hours = s?.HoursWorked > 0 ? (double?)s.HoursWorked : null,
                 status
             };
-        });
-        return Ok(rows);
+        }).ToList();
+
+        var counts = new
+        {
+            present = rows.Count(r => r.status == "Present"),
+            late = rows.Count(r => r.status == "Late"),
+            onLeave = rows.Count(r => r.status == "On Leave"),
+            absent = rows.Count(r => r.status == "Absent")
+        };
+
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var total = rows.Count;
+        var items = rows.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        return Ok(new { total, page, pageSize, items, counts });
     }
 
     /// <summary>Manual attendance entry (HR only).</summary>

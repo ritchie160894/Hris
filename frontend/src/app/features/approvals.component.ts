@@ -63,13 +63,13 @@ interface PendingRequest {
 
       <div class="filter-pills row mb">
         @for (f of filters; track f) {
-          <button class="filter-pill" [class.on]="filter() === f" (click)="filter.set(f)">
-            {{ f }} @if (f !== 'All') { ({{ countOf(f) }}) } @else { ({{ pending().length }}) }
+          <button class="filter-pill" [class.on]="filter() === f" (click)="setFilter(f)">
+            {{ f }} @if (f !== 'All') { ({{ countOf(f) }}) } @else { ({{ pendingCounts()['All'] || pendingTotal() }}) }
           </button>
         }
       </div>
 
-      @for (r of filtered(); track r.requestType + '-' + r.requestId) {
+      @for (r of pending(); track r.requestType + '-' + r.requestId) {
         <div class="req-card">
           <div class="avatar">{{ initials(r.employee) }}</div>
           <div class="req-main">
@@ -113,6 +113,14 @@ interface PendingRequest {
         @if (filter() !== 'Payroll') {
           <div class="card"><div class="empty">🎉 Nothing pending — you're all caught up.</div></div>
         }
+      }
+
+      @if (filter() !== 'Payroll' && pendingTotal() > pendingPageSize) {
+        <div class="pagination">
+          <span>Page {{ pendingPage() }} of {{ pendingTotalPages() }} · {{ pendingTotal() }} request(s)</span>
+          <button class="btn secondary sm" [disabled]="pendingPage() <= 1" (click)="pendingPage.set(pendingPage() - 1); loadPending()">Previous</button>
+          <button class="btn secondary sm" [disabled]="pendingPage() >= pendingTotalPages()" (click)="pendingPage.set(pendingPage() + 1); loadPending()">Next</button>
+        </div>
       }
 
       @if (filter() === 'Payroll' && !showPayrollSection()) {
@@ -209,6 +217,10 @@ interface PendingRequest {
 })
 export class ApprovalsComponent implements OnInit {
   pending = signal<PendingRequest[]>([]);
+  pendingPage = signal(1);
+  pendingTotal = signal(0);
+  pendingCounts = signal<Record<string, number>>({});
+  readonly pendingPageSize = 25;
   history = signal<any[]>([]);
   historyPage = signal(1);
   historyTotal = signal(0);
@@ -254,7 +266,7 @@ export class ApprovalsComponent implements OnInit {
   }
 
   load(): void {
-    this.api.get<PendingRequest[]>('approvals/pending').subscribe(res => this.pending.set(res));
+    this.loadPending();
     this.loadHistory();
     if (this.isPayrollApprover())
       this.api.get<{ items: any[] }>('payroll/cutoffs', { page: 1, pageSize: 100 }).subscribe(res => {
@@ -266,6 +278,29 @@ export class ApprovalsComponent implements OnInit {
         });
         this.payrollCutoffs.set(pending);
       });
+  }
+
+  loadPending(): void {
+    const type = this.filter();
+    this.api.get<{ total: number; items: PendingRequest[]; counts?: Record<string, number> }>('approvals/pending', {
+      page: this.pendingPage(),
+      pageSize: this.pendingPageSize,
+      type: type === 'All' || type === 'Payroll' ? undefined : type
+    }).subscribe(res => {
+      this.pending.set(res.items ?? []);
+      this.pendingTotal.set(res.total ?? 0);
+      if (res.counts) this.pendingCounts.set(res.counts);
+    });
+  }
+
+  setFilter(f: string): void {
+    this.filter.set(f);
+    this.pendingPage.set(1);
+    if (f !== 'Payroll') this.loadPending();
+  }
+
+  pendingTotalPages(): number {
+    return Math.max(1, Math.ceil(this.pendingTotal() / this.pendingPageSize));
   }
 
   loadHistory(): void {
@@ -325,15 +360,9 @@ export class ApprovalsComponent implements OnInit {
     });
   }
 
-  filtered(): PendingRequest[] {
-    const f = this.filter();
-    if (f === 'Payroll') return [];
-    return f === 'All' ? this.pending() : this.pending().filter(p => p.typeLabel === f);
-  }
-
   countOf(label: string): number {
     if (label === 'Payroll') return this.payrollCutoffs().length;
-    return this.pending().filter(p => p.typeLabel === label).length;
+    return this.pendingCounts()[label] ?? 0;
   }
 
   key(r: PendingRequest): string { return `${r.requestType}-${r.requestId}`; }
@@ -362,6 +391,7 @@ export class ApprovalsComponent implements OnInit {
         this.busy.set(false);
         this.expanded.set('');
         this.message.set(`${r.typeLabel} request for ${r.employee} — ${decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'returned for revision'}.`);
+        if (this.pending().length === 1 && this.pendingPage() > 1) this.pendingPage.set(this.pendingPage() - 1);
         this.load();
       },
       error: err => {

@@ -25,7 +25,7 @@ import { ApiService, saveBlob } from '../core/api.service';
             <select class="ctl" style="max-width:150px" [(ngModel)]="month">
               @for (m of months; track m.v) { <option [ngValue]="m.v">{{ m.n }}</option> }
             </select>
-            <button class="btn sm" (click)="loadRemittance()">Load</button>
+            <button class="btn sm" (click)="remitPage.set(1); loadRemittance()">Load</button>
             <div class="spacer"></div>
             <button class="btn secondary sm" (click)="exportRemit()">⬇ Export CSV</button>
           </div>
@@ -44,6 +44,13 @@ import { ApiService, saveBlob } from '../core/api.service';
               </tbody>
             </table>
           </div>
+          @if (remitTotal() > remitPageSize) {
+            <div class="row mt">
+              <button class="btn secondary sm" [disabled]="remitPage() <= 1" (click)="remitPage.set(remitPage() - 1); loadRemittance()">← Prev</button>
+              <span class="muted small">Page {{ remitPage() }} of {{ remitTotalPages() }} · {{ remitTotal() }} employee(s)</span>
+              <button class="btn secondary sm" [disabled]="remitPage() >= remitTotalPages()" (click)="remitPage.set(remitPage() + 1); loadRemittance()">Next →</button>
+            </div>
+          }
         </div>
       }
 
@@ -112,6 +119,9 @@ export class GovernmentComponent implements OnInit {
   pagibig = signal<any[]>([]);
   tax = signal<any[]>([]);
   remittance = signal<any[]>([]);
+  remitPage = signal(1);
+  remitTotal = signal(0);
+  readonly remitPageSize = 25;
   year = new Date().getFullYear();
   month = new Date().getMonth() + 1;
   months = Array.from({ length: 12 }, (_, i) => ({ v: i + 1, n: new Date(2000, i, 1).toLocaleString('en-US', { month: 'long' }) }));
@@ -127,8 +137,15 @@ export class GovernmentComponent implements OnInit {
   }
 
   loadRemittance(): void {
-    this.api.get<any[]>('government/remittance', { year: this.year, month: this.month }).subscribe(r => this.remittance.set(r));
+    this.api.get<{ total: number; items: any[] }>('government/remittance', {
+      year: this.year, month: this.month, page: this.remitPage(), pageSize: this.remitPageSize
+    }).subscribe(r => {
+      this.remittance.set(r.items ?? []);
+      this.remitTotal.set(r.total ?? 0);
+    });
   }
+
+  remitTotalPages(): number { return Math.max(1, Math.ceil(this.remitTotal() / this.remitPageSize)); }
 
   exportRemit(): void {
     this.api.download('reports/government', { year: this.year, month: this.month }).subscribe(r => saveBlob(r, 'remittance.csv'));

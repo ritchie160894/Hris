@@ -281,7 +281,7 @@ export class ReportsComponent implements OnInit {
   }
 
   private params(key: string): Record<string, unknown> {
-    const paged = ['attendance', 'payroll', 'leave', 'overtime', 'government'].includes(key);
+    const paged = ['attendance', 'payroll', 'leave', 'overtime', 'government', 'employees'].includes(key);
     const p: Record<string, unknown> = paged ? { page: this.reportPage(), pageSize: this.pageSize } : {};
     if (key === 'payroll') p['cutoffId'] = this.cutoffId;
     if (key === 'government') { p['year'] = this.year; p['month'] = this.month; }

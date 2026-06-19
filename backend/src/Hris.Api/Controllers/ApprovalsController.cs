@@ -25,10 +25,11 @@ public class ApprovalsController(HrisDbContext db, ApprovalService approvals, No
     ];
 
     [HttpGet("pending")]
-    public async Task<IActionResult> Pending()
+    public async Task<IActionResult> Pending([FromQuery] int page = 1, [FromQuery] int pageSize = 25, [FromQuery] string? type = null)
     {
         var role = User.Role();
-        if (!ApproverRoles.Contains(role)) return Ok(Array.Empty<object>());
+        if (!ApproverRoles.Contains(role))
+            return Ok(new { total = 0, page, pageSize, items = Array.Empty<object>(), counts = EmptyPendingCounts() });
 
         // Steps currently pending for my role
         var stepsQ = db.ApprovalActions.Where(a => a.Status == ApprovalStepStatus.Pending);
@@ -171,8 +172,35 @@ public class ApprovalsController(HrisDbContext db, ApprovalService approvals, No
             }
         }
 
-        return Ok(result.OrderBy(r => ((dynamic)r).date).ToList());
+        var ordered = result.OrderBy(r => ((dynamic)r).date).ToList();
+        var counts = new Dictionary<string, int>
+        {
+            ["All"] = ordered.Count,
+            ["Leave"] = ordered.Count(r => ((dynamic)r).typeLabel == "EL"),
+            ["SIL"] = ordered.Count(r => ((dynamic)r).typeLabel == "SIL"),
+            ["Overtime"] = ordered.Count(r => ((dynamic)r).typeLabel == "Overtime"),
+            ["Overtime Correction"] = ordered.Count(r => ((dynamic)r).typeLabel == "Overtime Correction"),
+            ["Cash Advance"] = ordered.Count(r => ((dynamic)r).typeLabel == "Cash Advance"),
+            ["Loan"] = ordered.Count(r => ((dynamic)r).typeLabel == "Loan"),
+            ["Attendance Correction"] = ordered.Count(r => ((dynamic)r).typeLabel == "Attendance Correction")
+        };
+
+        IEnumerable<object> filtered = ordered;
+        if (!string.IsNullOrEmpty(type) && type != "All")
+            filtered = ordered.Where(r => ((dynamic)r).typeLabel == type);
+
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var list = filtered.ToList();
+        var total = list.Count;
+        var items = list.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        return Ok(new { total, page, pageSize, items, counts });
     }
+
+    private static Dictionary<string, int> EmptyPendingCounts() => new()
+    {
+        ["All"] = 0, ["Leave"] = 0, ["SIL"] = 0, ["Overtime"] = 0, ["Overtime Correction"] = 0,
+        ["Cash Advance"] = 0, ["Loan"] = 0, ["Attendance Correction"] = 0
+    };
 
     public record ActRequest(string RequestType, int RequestId, bool Approve, string? Remarks, bool ReturnForRevision = false);
 

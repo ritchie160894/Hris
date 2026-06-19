@@ -22,7 +22,7 @@ import { AuthService } from '../core/auth.service';
 
       <div class="card">
         <div class="row mb">
-          <select class="ctl" style="max-width:200px" [(ngModel)]="category" (change)="load()">
+          <select class="ctl" style="max-width:200px" [(ngModel)]="category" (change)="page.set(1); load()">
             <option value="">All categories</option>
             @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
           </select>
@@ -48,6 +48,13 @@ import { AuthService } from '../core/auth.service';
             </tbody>
           </table>
         </div>
+        @if (total() > pageSize) {
+          <div class="row mt">
+            <button class="btn secondary sm" [disabled]="page() <= 1" (click)="page.set(page() - 1); load()">← Prev</button>
+            <span class="muted small">Page {{ page() }} of {{ totalPages() }} · {{ total() }} document(s)</span>
+            <button class="btn secondary sm" [disabled]="page() >= totalPages()" (click)="page.set(page() + 1); load()">Next →</button>
+          </div>
+        }
       </div>
 
       @if (showUpload()) {
@@ -75,6 +82,9 @@ import { AuthService } from '../core/auth.service';
 })
 export class DocumentsComponent implements OnInit {
   docs = signal<any[]>([]);
+  page = signal(1);
+  total = signal(0);
+  readonly pageSize = 25;
   expiring = signal<any[]>([]);
   showUpload = signal(false);
   busy = signal(false);
@@ -89,9 +99,16 @@ export class DocumentsComponent implements OnInit {
   ngOnInit(): void { this.load(); }
 
   load(): void {
-    this.api.get<any[]>('documents', { category: this.category }).subscribe(r => this.docs.set(r));
+    this.api.get<{ total: number; items: any[] }>('documents', {
+      category: this.category, page: this.page(), pageSize: this.pageSize
+    }).subscribe(r => {
+      this.docs.set(r.items ?? []);
+      this.total.set(r.total ?? 0);
+    });
     this.api.get<any[]>('documents/expiring').subscribe(r => this.expiring.set(r));
   }
+
+  totalPages(): number { return Math.max(1, Math.ceil(this.total() / this.pageSize)); }
 
   pickFile(ev: Event): void {
     this.file = (ev.target as HTMLInputElement).files?.[0] ?? null;

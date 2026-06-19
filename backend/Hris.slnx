@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Hris.Api/Hris.Api.csproj" />
+    <Project Path="src/Hris.Domain/Hris.Domain.csproj" />
+    <Project Path="src/Hris.SiteGateway/Hris.SiteGateway.csproj" />
+  </Folder>
+</Solution>

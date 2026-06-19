@@ -1,0 +1,37 @@
+# ---- OS / IDE ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ---- Secrets (never commit) ----
+**/.env
+**/.env.*
+**/appsettings.Production.json
+**/appsettings.Local.json
+**/secrets.json
+
+# ---- .NET / backend ----
+**/bin/
+**/obj/
+**/.vs/
+*.log
+*.db
+*.db-shm
+*.db-wal
+sitegateway.db
+
+# ---- Node / frontend ----
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/npm-debug.log*
+frontend/yarn-error.log*
+
+# ---- Cursor / local tooling ----
+.cursor/
+terminals/

@@ -163,7 +163,7 @@ export class ShellComponent {
       items: [
         { label: 'Employees', icon: '👥', link: '/employees', roles: ['SuperAdministrator', 'HrAdministrator', 'HrOfficer', 'DepartmentHead', 'Supervisor', 'PayrollOfficer'] },
         { label: 'Organization', icon: '🏢', link: '/organization', roles: ['SuperAdministrator', 'HrAdministrator', 'HrOfficer'] },
-        { label: 'Attendance', icon: '🕐', link: '/attendance', roles: ShellComponent.STAFF },
+        { label: 'Attendance', icon: '🕐', link: '/attendance', roles: ['SuperAdministrator', 'HrAdministrator', 'HrOfficer', 'PayrollOfficer', 'DepartmentHead', 'Supervisor'] },
         { label: 'Leave', icon: '🌴', link: '/leave', roles: ShellComponent.STAFF },
         { label: 'Overtime', icon: '⏱', link: '/overtime', roles: ShellComponent.STAFF }
       ]

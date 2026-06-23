@@ -9,6 +9,7 @@ const HR = ['SuperAdministrator', 'HrAdministrator', 'HrOfficer'];
 const PAYROLL = ['SuperAdministrator', 'HrAdministrator', 'PayrollOfficer'];
 const BENEFITS = ['SuperAdministrator', 'HrAdministrator', 'HrOfficer', 'PayrollOfficer'];
 const MANAGERS = ['SuperAdministrator', 'HrAdministrator', 'HrOfficer', 'DepartmentHead', 'Supervisor', 'PayrollOfficer'];
+const ATTENDANCE = ['SuperAdministrator', 'HrAdministrator', 'HrOfficer', 'PayrollOfficer', 'DepartmentHead', 'Supervisor'];
 const REPORTS = ['SuperAdministrator', 'HrAdministrator', 'HrOfficer', 'PayrollOfficer', 'DepartmentHead'];
 
 export const routes: Routes = [
@@ -25,7 +26,7 @@ export const routes: Routes = [
       { path: 'employees', canActivate: [roleGuard(...MANAGERS)], loadComponent: () => import('./features/employees.component').then(m => m.EmployeesComponent) },
       { path: 'employees/:id', canActivate: [roleGuard(...MANAGERS)], loadComponent: () => import('./features/employee-detail.component').then(m => m.EmployeeDetailComponent) },
       { path: 'organization', canActivate: [roleGuard(...HR)], loadComponent: () => import('./features/organization.component').then(m => m.OrganizationComponent) },
-      { path: 'attendance', canActivate: [nonExecGuard], loadComponent: () => import('./features/attendance.component').then(m => m.AttendanceComponent) },
+      { path: 'attendance', canActivate: [roleGuard(...ATTENDANCE)], loadComponent: () => import('./features/attendance.component').then(m => m.AttendanceComponent) },
       { path: 'leave', canActivate: [nonExecGuard], loadComponent: () => import('./features/leave.component').then(m => m.LeaveComponent) },
       { path: 'overtime', canActivate: [nonExecGuard], loadComponent: () => import('./features/overtime.component').then(m => m.OvertimeComponent) },
       { path: 'payroll', canActivate: [roleGuard(...PAYROLL)], loadComponent: () => import('./features/payroll.component').then(m => m.PayrollComponent) },

@@ -162,6 +162,9 @@ public class AttendanceController(HrisDbContext db, AuditService audit, Approval
         [FromQuery] DateOnly date, [FromQuery] int? departmentId,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 25)
     {
+        if (User.Role() == UserRole.Employee)
+            return Forbid();
+
         var execIds = await ExecutiveExemption.GetExemptEmployeeIdsAsync(db);
 
         var employeesQ = db.Employees

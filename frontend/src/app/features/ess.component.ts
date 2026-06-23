@@ -11,6 +11,11 @@ import { AuthService } from '../core/auth.service';
   styles: [`
     .profile-card { max-width: 560px; width: 100%; }
     .pagination { display: flex; align-items: center; gap: 10px; padding: 12px 0 0; font-size: 13px; color: var(--text-soft); flex-wrap: wrap; }
+    .day-punches { display: flex; flex-direction: column; gap: 6px; }
+    .day-punch { display: flex; flex-direction: column; gap: 1px; font-size: 13px; line-height: 1.35; }
+    .day-punch.missing { opacity: .55; }
+    .day-punch .time { font-variant-numeric: tabular-nums; }
+    .att-subtabs { margin-bottom: 0; }
   `],
   template: `
     <div class="page">
@@ -30,41 +35,132 @@ import { AuthService } from '../core/auth.service';
       </div>
 
       <div class="tabs">
-        <button [class.active]="tab() === 'attendance'" (click)="tab.set('attendance')">My Attendance</button>
+        <button [class.active]="tab() === 'attendance'" (click)="tab.set('attendance'); loadLogDays()">My Attendance</button>
         <button [class.active]="tab() === 'payslips'" (click)="tab.set('payslips'); loadPayslips()">My Payslips</button>
         <button [class.active]="tab() === 'balances'" (click)="tab.set('balances'); loadBalances()">My Leave Credits</button>
         <button [class.active]="tab() === 'profile'" (click)="tab.set('profile')">Personal Info</button>
       </div>
 
       @if (tab() === 'attendance') {
-        <div class="card">
-          <div class="row mb date-range">
-            <input class="ctl" type="date" [(ngModel)]="from" (change)="logPage.set(1); loadLogs()" />
-            <span class="muted">to</span>
-            <input class="ctl" type="date" [(ngModel)]="to" (change)="logPage.set(1); loadLogs()" />
-          </div>
-          <div class="table-wrap">
-          <table class="data">
-            <thead><tr><th>Date & Time</th><th>Punch</th><th>Source</th><th>Site</th></tr></thead>
-            <tbody>
-              @for (l of logs(); track l.id) {
-                <tr>
-                  <td>{{ l.punchTime | date:'EEE, MMM d · h:mm a' }}</td>
-                  <td><span class="badge {{ l.punchType === 'TimeIn' ? 'success' : 'info' }}">{{ l.punchType }}</span></td>
-                  <td>{{ l.source }}</td><td class="muted">{{ l.site }}</td>
-                </tr>
-              } @empty { <tr><td colspan="4"><div class="empty">No attendance records in this range</div></td></tr> }
-            </tbody>
-          </table>
-          </div>
-          @if (logTotal() > logPageSize) {
-            <div class="pagination">
-              <span>Page {{ logPage() }} of {{ logTotalPages() }} · {{ logTotal() }} record(s) · {{ logPageSize }} rows/page</span>
-              <button class="btn secondary sm" [disabled]="logPage() <= 1" (click)="logPage.set(logPage() - 1); loadLogs()">Previous</button>
-              <button class="btn secondary sm" [disabled]="logPage() >= logTotalPages()" (click)="logPage.set(logPage() + 1); loadLogs()">Next</button>
-            </div>
-          }
+        <div class="tabs att-subtabs">
+          <button [class.active]="attTab() === 'logs'" (click)="attTab.set('logs'); loadLogDays()">Raw Logs</button>
+          <button [class.active]="attTab() === 'corrections'" (click)="attTab.set('corrections'); loadCorrections()">Corrections</button>
         </div>
+
+        @if (attTab() === 'logs') {
+          <div class="card">
+            <div class="row mb">
+              <input class="ctl" style="max-width:170px" type="date" [(ngModel)]="logFrom" (change)="logPage.set(1); loadLogDays()" />
+              <span class="muted">to</span>
+              <input class="ctl" style="max-width:170px" type="date" [(ngModel)]="logTo" (change)="logPage.set(1); loadLogDays()" />
+              <div class="spacer"></div>
+              <span class="muted small">{{ logTotal() }} day(s)</span>
+            </div>
+            <div class="table-wrap">
+              <table class="data logs-by-day">
+                <thead><tr><th>Employee</th><th>Punch</th><th>Date & Time</th><th>Source</th><th>Verify</th><th>Site / Device</th></tr></thead>
+                <tbody>
+                  @for (row of logDays(); track row.date + row.employee?.id) {
+                    <tr>
+                      <td style="vertical-align:top">
+                        <div class="bold">{{ row.employee?.name }}</div>
+                        <div class="muted small">{{ row.employee?.employeeCode }}</div>
+                        <div class="muted small">{{ row.date | date:'EEE, MMM d, y' }}</div>
+                      </td>
+                      <td style="vertical-align:top;padding:0">
+                        <div class="day-punches">
+                          @for (p of row.punches; track p.slot) {
+                            <div class="day-punch" [class.missing]="p.missing">
+                              <span class="badge {{ p.label === 'Time In' ? 'success' : 'info' }}">{{ p.label }}</span>
+                              @if (p.isCorrected) { <span class="badge warning" style="margin-left:4px">corrected</span> }
+                            </div>
+                          }
+                        </div>
+                      </td>
+                      <td style="vertical-align:top;padding:0">
+                        <div class="day-punches">
+                          @for (p of row.punches; track p.slot) {
+                            <div class="day-punch" [class.missing]="p.missing">
+                              <span class="time">{{ p.punchTime ? (p.punchTime | date:'MMM d, y h:mm:ss a') : '—' }}</span>
+                            </div>
+                          }
+                        </div>
+                      </td>
+                      <td style="vertical-align:top;padding:0">
+                        <div class="day-punches">
+                          @for (p of row.punches; track p.slot) {
+                            <div class="day-punch" [class.missing]="p.missing"><span>{{ p.source || '—' }}</span></div>
+                          }
+                        </div>
+                      </td>
+                      <td style="vertical-align:top;padding:0">
+                        <div class="day-punches">
+                          @for (p of row.punches; track p.slot) {
+                            <div class="day-punch" [class.missing]="p.missing"><span class="muted">{{ p.verifyMode || '—' }}</span></div>
+                          }
+                        </div>
+                      </td>
+                      <td style="vertical-align:top;padding:0">
+                        <div class="day-punches">
+                          @for (p of row.punches; track p.slot) {
+                            <div class="day-punch" [class.missing]="p.missing">
+                              <span>{{ p.site || '—' }}</span>
+                              @if (p.device) { <span class="muted small">{{ p.device }}</span> }
+                            </div>
+                          }
+                        </div>
+                      </td>
+                    </tr>
+                  } @empty { <tr><td colspan="6"><div class="empty">No logs found</div></td></tr> }
+                </tbody>
+              </table>
+            </div>
+            @if (logTotal() > logPageSize) {
+              <div class="row mt">
+                <button class="btn secondary sm" [disabled]="logPage() <= 1" (click)="logPage.set(logPage() - 1); loadLogDays()">← Prev</button>
+                <span class="muted small">Page {{ logPage() }} of {{ logTotalPages() }}</span>
+                <button class="btn secondary sm" [disabled]="logPage() >= logTotalPages()" (click)="logPage.set(logPage() + 1); loadLogDays()">Next →</button>
+              </div>
+            }
+          </div>
+        }
+
+        @if (attTab() === 'corrections') {
+          <div class="card">
+            <div class="row mb">
+              <div class="spacer"></div>
+              <button class="btn" (click)="openCorrection()">＋ Request Correction</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data">
+                <thead><tr><th>Date</th><th>Issue</th><th>Punch</th><th>Corrected Time</th><th>Reason</th><th>Status</th></tr></thead>
+                <tbody>
+                  @for (c of corrections(); track c.id) {
+                    <tr>
+                      <td>{{ c.attendanceDate }}</td>
+                      <td class="muted small">{{ formatIssue(c.issueType) }}</td>
+                      <td>{{ c.punchType }}</td>
+                      <td>{{ c.correctedTime | date:'MMM d, h:mm a' }}</td>
+                      <td class="muted">{{ c.reason }}</td>
+                      <td>
+                        <span class="badge {{ c.status.toLowerCase() }}">{{ c.status }}</span>
+                        @if (c.status === 'InProgress') { <div class="muted small">Level {{ c.currentApprovalLevel }}</div> }
+                        @if (c.payrollAppliedAt) { <div class="muted small">Applied to payroll</div> }
+                      </td>
+                    </tr>
+                  } @empty { <tr><td colspan="6"><div class="empty">No correction requests</div></td></tr> }
+                </tbody>
+              </table>
+            </div>
+            @if (correctionTotal() > correctionPageSize) {
+              <div class="row mt">
+                <button class="btn secondary sm" [disabled]="correctionPage() <= 1" (click)="correctionPage.set(correctionPage() - 1); loadCorrections()">← Prev</button>
+                <span class="muted small">Page {{ correctionPage() }} of {{ correctionTotalPages() }} · {{ correctionTotal() }} record(s)</span>
+                <button class="btn secondary sm" [disabled]="correctionPage() >= correctionTotalPages()" (click)="correctionPage.set(correctionPage() + 1); loadCorrections()">Next →</button>
+              </div>
+            }
+          </div>
+        }
       }
 
       @if (tab() === 'payslips') {
@@ -135,6 +231,34 @@ import { AuthService } from '../core/auth.service';
         </div>
       }
 
+      @if (showCorrection()) {
+        <div class="modal-backdrop" (click)="showCorrection.set(false)">
+          <div class="modal" (click)="$event.stopPropagation()">
+            <div class="modal-title">Request Attendance Correction</div>
+            @if (attError()) { <div class="alert error">{{ attError() }}</div> }
+            <label class="field"><span class="lbl">Issue Type *</span>
+              <select class="ctl" [(ngModel)]="correction.issueType">
+                @for (i of issueTypes; track i.v) { <option [ngValue]="i.v">{{ i.n }}</option> }
+              </select>
+            </label>
+            <label class="field"><span class="lbl">Attendance Date</span><input class="ctl" type="date" [(ngModel)]="correction.attendanceDate" /></label>
+            <label class="field"><span class="lbl">Punch Type</span>
+              <select class="ctl" [(ngModel)]="correction.punchType">
+                <option [ngValue]="1">Time In</option><option [ngValue]="2">Time Out</option>
+                <option [ngValue]="3">Break In</option><option [ngValue]="4">Break Out</option>
+              </select></label>
+            <label class="field"><span class="lbl">Correct Time</span><input class="ctl" type="datetime-local" [(ngModel)]="correction.correctedTime" /></label>
+            <label class="field"><span class="lbl">Reason *</span><textarea class="ctl" [(ngModel)]="correction.reason"></textarea></label>
+            <label class="field"><span class="lbl">Supporting Document (optional)</span><input class="ctl" [(ngModel)]="correction.supportingDocument" placeholder="File name or reference" /></label>
+            <div class="muted small mb">Approval: Supervisor/Dept Head → HR Officer → Payroll Officer (apply to payroll).</div>
+            <div class="modal-actions">
+              <button class="btn secondary" (click)="showCorrection.set(false)">Cancel</button>
+              <button class="btn" (click)="saveCorrection()">Submit Request</button>
+            </div>
+          </div>
+        </div>
+      }
+
       @if (slip()) {
         <div class="modal-backdrop" (click)="slip.set(null)">
           <div class="modal printable" (click)="$event.stopPropagation()">
@@ -165,10 +289,28 @@ import { AuthService } from '../core/auth.service';
 })
 export class EssComponent implements OnInit {
   tab = signal('attendance');
-  logs = signal<any[]>([]);
+  attTab = signal('logs');
+  logFrom = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+  logTo = new Date().toISOString().slice(0, 10);
+  logDays = signal<any[]>([]);
   logPage = signal(1);
   logTotal = signal(0);
   readonly logPageSize = 25;
+  corrections = signal<any[]>([]);
+  correctionPage = signal(1);
+  correctionTotal = signal(0);
+  readonly correctionPageSize = 25;
+  showCorrection = signal(false);
+  attError = signal('');
+  correction: any = { punchType: 1, issueType: 'MissingTimeIn' };
+  issueTypes = [
+    { v: 'MissingTimeIn', n: 'Missing Time In' },
+    { v: 'MissingTimeOut', n: 'Missing Time Out' },
+    { v: 'IncorrectRecord', n: 'Incorrect Attendance Record' },
+    { v: 'ForgottenBiometric', n: 'Forgotten Biometrics Scan' },
+    { v: 'DeviceFailure', n: 'Device Failure' },
+    { v: 'Other', n: 'Other' }
+  ];
   payslips = signal<any[]>([]);
   payslipPage = signal(1);
   payslipTotal = signal(0);
@@ -178,34 +320,72 @@ export class EssComponent implements OnInit {
   saved = signal(false);
   pwMessage = signal('');
   pwError = signal(false);
-  from = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
-  to = new Date().toISOString().slice(0, 10);
   profile: any = {};
   pw = { current: '', next: '' };
 
   constructor(private api: ApiService, public auth: AuthService) {}
 
   ngOnInit(): void {
-    this.auth.refreshProfile().subscribe({ next: () => this.loadLogs(), error: () => this.loadLogs() });
+    this.auth.refreshProfile().subscribe({ next: () => this.loadLogDays(), error: () => this.loadLogDays() });
   }
 
-  loadLogs(): void {
-    const employeeId = this.auth.user()?.employeeId;
-    if (!employeeId) {
-      this.logs.set([]);
+  loadLogDays(): void {
+    if (!this.auth.user()?.employeeId) {
+      this.logDays.set([]);
       this.logTotal.set(0);
       return;
     }
-    this.api.get<{ total: number; items: any[] }>('attendance/logs', {
-      from: this.from, to: this.to, employeeId,
-      page: this.logPage(), pageSize: this.logPageSize
+    this.api.get<{ total: number; items: any[] }>('attendance/logs/by-day', {
+      from: this.logFrom, to: this.logTo, page: this.logPage(), pageSize: this.logPageSize
     }).subscribe(r => {
-      this.logs.set(r.items ?? []);
+      this.logDays.set(r.items ?? []);
       this.logTotal.set(r.total ?? 0);
     });
   }
 
   logTotalPages(): number { return Math.max(1, Math.ceil(this.logTotal() / this.logPageSize)); }
+
+  loadCorrections(): void {
+    if (!this.auth.user()?.employeeId) {
+      this.corrections.set([]);
+      this.correctionTotal.set(0);
+      return;
+    }
+    this.api.get<{ total: number; items: any[] }>('attendance/corrections', {
+      page: this.correctionPage(), pageSize: this.correctionPageSize
+    }).subscribe(r => {
+      this.corrections.set(r.items ?? []);
+      this.correctionTotal.set(r.total ?? 0);
+    });
+  }
+
+  correctionTotalPages(): number { return Math.max(1, Math.ceil(this.correctionTotal() / this.correctionPageSize)); }
+
+  openCorrection(): void {
+    this.attError.set('');
+    this.correction = {
+      punchType: 1, issueType: 'MissingTimeIn',
+      employeeId: this.auth.user()?.employeeId,
+      attendanceDate: this.logTo
+    };
+    this.showCorrection.set(true);
+  }
+
+  formatIssue(v: string): string {
+    return this.issueTypes.find(i => i.v === v)?.n ?? v?.replace(/([A-Z])/g, ' $1').trim() ?? '—';
+  }
+
+  saveCorrection(): void {
+    if (!this.correction.reason) { this.attError.set('Reason is required.'); return; }
+    this.api.post('attendance/corrections', this.correction).subscribe({
+      next: () => {
+        this.showCorrection.set(false);
+        this.loadCorrections();
+        this.attTab.set('corrections');
+      },
+      error: err => this.attError.set(err?.error?.message ?? 'Failed to submit.')
+    });
+  }
 
   loadPayslips(): void {
     this.api.get<{ total: number; items: any[] } | any[]>('payroll/my-payslips', {

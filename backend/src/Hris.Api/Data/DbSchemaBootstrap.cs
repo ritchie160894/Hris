@@ -541,4 +541,24 @@ public static class DbSchemaBootstrap
 
     private static Task Exec(HrisDbContext db, string sql, CancellationToken ct) =>
         db.Database.ExecuteSqlRawAsync(sql, ct);
+
+    public static async Task ApplyBenefitsSchemaAsync(HrisDbContext db, ILogger logger, CancellationToken ct = default)
+    {
+        try
+        {
+            await Exec(db, """
+                IF COL_LENGTH('Benefits','IsThirteenthMonth') IS NULL
+                  ALTER TABLE Benefits ADD IsThirteenthMonth bit NOT NULL CONSTRAINT DF_Benefits_13th DEFAULT 0;
+                """, ct);
+            await Exec(db, """
+                UPDATE Benefits SET IsThirteenthMonth = 1
+                WHERE IsThirteenthMonth = 0 AND (Name LIKE '%13th%' OR Name LIKE '%Thirteenth%');
+                """, ct);
+            logger.LogInformation("Benefits schema bootstrap applied.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Benefits schema bootstrap skipped.");
+        }
+    }
 }

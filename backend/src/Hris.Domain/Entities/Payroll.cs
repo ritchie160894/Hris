@@ -166,6 +166,8 @@ public class Benefit : BaseEntity
     public string? Provider { get; set; }
     public string? Description { get; set; }
     public decimal? MonthlyCost { get; set; }
+    /// <summary>When true, payroll accrues basic salary ÷ 12 per cutoff for assigned employees (PD 851).</summary>
+    public bool IsThirteenthMonth { get; set; }
     public bool IsActive { get; set; } = true;
 }
 

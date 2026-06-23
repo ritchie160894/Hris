@@ -31,7 +31,6 @@ export const routes: Routes = [
       { path: 'loans', canActivate: [nonExecGuard], loadComponent: () => import('./features/loans.component').then(m => m.LoansComponent) },
       { path: 'government', canActivate: [roleGuard(...PAYROLL)], loadComponent: () => import('./features/government.component').then(m => m.GovernmentComponent) },
       { path: 'benefits', canActivate: [nonExecGuard], loadComponent: () => import('./features/benefits.component').then(m => m.BenefitsComponent) },
-      { path: 'recruitment', canActivate: [roleGuard(...HR)], loadComponent: () => import('./features/recruitment.component').then(m => m.RecruitmentComponent) },
       { path: 'performance', canActivate: [roleGuard(...MANAGERS)], loadComponent: () => import('./features/performance.component').then(m => m.PerformanceComponent) },
       { path: 'training', canActivate: [roleGuard(...HR)], loadComponent: () => import('./features/training.component').then(m => m.TrainingComponent) },
       { path: 'documents', canActivate: [nonExecGuard], loadComponent: () => import('./features/documents.component').then(m => m.DocumentsComponent) },

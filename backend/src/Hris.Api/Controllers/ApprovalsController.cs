@@ -15,7 +15,7 @@ namespace Hris.Api.Controllers;
 [ApiController]
 [Route("api/approvals")]
 [Authorize]
-public class ApprovalsController(HrisDbContext db, ApprovalService approvals, NotificationService notifications, AuditService audit) : ControllerBase
+public class ApprovalsController(HrisDbContext db, ApprovalService approvals, NotificationService notifications, AuditService audit, PayrollDeductionService deductions) : ControllerBase
 {
     private static readonly UserRole[] ApproverRoles =
     [
@@ -220,6 +220,7 @@ public class ApprovalsController(HrisDbContext db, ApprovalService approvals, No
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
 
         // update underlying record + apply side effects
+        int? syncLoanDeductionsForEmployee = null;
         switch (type)
         {
             case RequestType.Leave:
@@ -257,7 +258,12 @@ public class ApprovalsController(HrisDbContext db, ApprovalService approvals, No
                 var loan = await db.Loans.FirstAsync(x => x.Id == req.RequestId);
                 loan.ApprovalStatus = result.Status;
                 loan.CurrentApprovalLevel = result.NextLevel;
-                if (result.Status == RequestStatus.Approved) { loan.Status = LoanStatus.Active; loan.Balance = loan.Principal; }
+                if (result.Status == RequestStatus.Approved)
+                {
+                    loan.Status = LoanStatus.Active;
+                    loan.Balance = loan.Principal;
+                    syncLoanDeductionsForEmployee = loan.EmployeeId;
+                }
                 else if (result.Status == RequestStatus.Rejected) loan.Status = LoanStatus.Rejected;
                 await notifications.NotifyEmployeeAsync(loan.EmployeeId, NotificationType.ApprovalResult,
                     $"{(loan.Type == LoanType.CashAdvance ? "Cash advance" : "Loan")} {StatusLabel(result.Status)}",
@@ -269,6 +275,8 @@ public class ApprovalsController(HrisDbContext db, ApprovalService approvals, No
         }
 
         await db.SaveChangesAsync();
+        if (syncLoanDeductionsForEmployee.HasValue)
+            await deductions.SyncLoanDeductionsAsync(syncLoanDeductionsForEmployee.Value);
         return Ok(new { status = result.Status.ToString(), completed = result.Completed });
     }
 

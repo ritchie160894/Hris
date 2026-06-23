@@ -80,12 +80,21 @@ public class PayrollService(HrisDbContext db, AuditService audit, AttendanceSumm
         var selectionsByEmp = allSelections.GroupBy(s => s.EmployeeId).ToDictionary(g => g.Key, g => g.ToDictionary(x => x.EmployeeDeductionId));
         var cutoffUsesChecklist = allSelections.Count > 0;
 
+        var thirteenthMonthEmployeeIds = (await db.EmployeeBenefits
+            .Include(eb => eb.Benefit)
+            .Where(eb => eb.Benefit!.IsActive && eb.Benefit.IsThirteenthMonth
+                && eb.EffectiveDate <= cutoff.PeriodEnd
+                && (eb.EndDate == null || eb.EndDate >= cutoff.PeriodStart))
+            .Select(eb => eb.EmployeeId)
+            .Distinct()
+            .ToListAsync(ct)).ToHashSet();
+
         var count = 0;
         foreach (var emp in employees)
         {
             var empSel = selectionsByEmp.GetValueOrDefault(emp.Id) ?? new Dictionary<int, PayrollCutoffDeductionSelection>();
             var empHasManaged = allEmpDeductions.Any(d => d.EmployeeId == emp.Id && d.IsActive && d.IsProfileEnabled);
-            var slip = ComputePayslip(cutoff, emp, isFirstHalf, dailySummaries, approvedOt, approvedLeaves, holidays, components, activeLoans, sssTable, phc, pic, taxTable, silBalances, deductionTypes, allEmpDeductions, empSel, cutoffUsesChecklist, !empHasManaged);
+            var slip = ComputePayslip(cutoff, emp, isFirstHalf, dailySummaries, approvedOt, approvedLeaves, holidays, components, activeLoans, sssTable, phc, pic, taxTable, silBalances, deductionTypes, allEmpDeductions, empSel, cutoffUsesChecklist, !empHasManaged, thirteenthMonthEmployeeIds);
             db.Payslips.Add(slip);
             count++;
         }
@@ -104,7 +113,8 @@ public class PayrollService(HrisDbContext db, AuditService audit, AttendanceSumm
         List<SssBracket> sssTable, PhilHealthConfig? phc, PagIbigConfig? pic, List<TaxBracket> taxTable,
         List<LeaveBalance> silBalances,
         List<DeductionType> deductionTypes, List<EmployeeDeduction> allEmpDeductions,
-        Dictionary<int, PayrollCutoffDeductionSelection> selectionsByDeductionId, bool cutoffUsesChecklist, bool useLegacyLoans)
+        Dictionary<int, PayrollCutoffDeductionSelection> selectionsByDeductionId, bool cutoffUsesChecklist, bool useLegacyLoans,
+        HashSet<int> thirteenthMonthEmployeeIds)
     {
         // HR policy: Basic Salary ÷ 24 = daily rate; daily rate ÷ 8 = hourly rate.
         // Basic pay = actual regular hours worked × hourly rate (+ SIL-covered undertime hours).
@@ -247,6 +257,10 @@ public class PayrollService(HrisDbContext db, AuditService audit, AttendanceSumm
 
         var earnedBasic = Math.Round((regularHoursPaid + silHoursForPay) * hourlyRate, 2);
         var basicPay = Math.Max(0, earnedBasic);
+        var thirteenthMonthPay = thirteenthMonthEmployeeIds.Contains(emp.Id)
+            ? Math.Round(basicPay / 12m, 2)
+            : 0;
+        bonuses += thirteenthMonthPay;
         var grossPay = basicPay + otPay + allowances + bonuses;
 
         // Government contributions: full monthly amounts deducted on the 2nd cutoff of the month.
@@ -284,6 +298,9 @@ public class PayrollService(HrisDbContext db, AuditService audit, AttendanceSumm
 
         decimal loanDeductions = 0;
         var lines = new List<object>();
+
+        if (thirteenthMonthPay > 0)
+            lines.Add(new { type = "earning", code = "13TH_MONTH", name = "13th Month Pay (basic ÷ 12)", amount = thirteenthMonthPay });
 
         var recurringLines = deductions.ComputeForEmployee(
             emp, isFirstHalf, cutoff, deductionTypes, allEmpDeductions, selectionsByDeductionId, allLoans, cutoffUsesChecklist, useLegacyLoans);

@@ -180,7 +180,6 @@ export class ShellComponent {
     {
       title: 'Talent',
       items: [
-        { label: 'Recruitment', icon: '📋', link: '/recruitment', roles: ['SuperAdministrator', 'HrAdministrator', 'HrOfficer'] },
         { label: 'Performance', icon: '📈', link: '/performance', roles: ['SuperAdministrator', 'HrAdministrator', 'HrOfficer', 'DepartmentHead', 'Supervisor', 'PayrollOfficer'] },
         { label: 'Training', icon: '🎓', link: '/training', roles: ['SuperAdministrator', 'HrAdministrator', 'HrOfficer'] },
         { label: 'Documents', icon: '📁', link: '/documents', roles: ShellComponent.STAFF }

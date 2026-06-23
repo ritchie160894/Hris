@@ -32,6 +32,7 @@ builder.Services.AddScoped<SyncBatchMaintenanceService>();
 builder.Services.AddHostedService<PayrollBackgroundService>();
 builder.Services.AddHostedService<AttendanceMaintenanceHostedService>();
 builder.Services.AddHostedService<SyncBatchMaintenanceHostedService>();
+builder.Services.AddHostedService<NotificationCleanupHostedService>();
 
 builder.Services.Configure<HostOptions>(o =>
     o.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore);
@@ -77,6 +78,7 @@ using (var scope = app.Services.CreateScope())
         await DbSchemaBootstrap.ApplySystemSettingsSchemaAsync(db, app.Logger);
         await DbSchemaBootstrap.ApplyEmployeeStatutorySchemaAsync(db, app.Logger);
         await DbSchemaBootstrap.ApplyPayrollDeductionSchemaAsync(db, app.Logger);
+        await DbSchemaBootstrap.ApplyBenefitsSchemaAsync(db, app.Logger);
         var deductionSvc = scope.ServiceProvider.GetRequiredService<PayrollDeductionService>();
         await deductionSvc.EnsureDeductionTypesSeededAsync();
     }

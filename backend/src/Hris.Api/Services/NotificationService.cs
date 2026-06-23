@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Hris.Api.Services;
 
-public class NotificationService(HrisDbContext db)
+public class NotificationService(HrisDbContext db, IConfiguration config)
 {
     public void Notify(int userId, NotificationType type, string title, string message, string? link = null)
     {
@@ -30,5 +30,14 @@ public class NotificationService(HrisDbContext db)
     {
         var userIds = await db.Users.Where(u => u.IsActive && u.EmployeeId == employeeId).Select(u => u.Id).ToListAsync();
         foreach (var id in userIds) Notify(id, type, title, message, link);
+    }
+
+    /// <summary>Deletes in-app notifications older than the configured retention window.</summary>
+    public async Task<int> PurgeExpiredAsync(CancellationToken ct = default)
+    {
+        var retainDays = config.GetValue("Notifications:RetainDays", 7);
+        if (retainDays < 1) retainDays = 1;
+        var cutoff = DateTime.UtcNow.AddDays(-retainDays);
+        return await db.Notifications.Where(n => n.CreatedAt < cutoff).ExecuteDeleteAsync(ct);
     }
 }

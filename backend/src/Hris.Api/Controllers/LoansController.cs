@@ -11,7 +11,7 @@ namespace Hris.Api.Controllers;
 [ApiController]
 [Route("api/loans")]
 [Authorize]
-public class LoansController(HrisDbContext db, ApprovalService approvals, AuditService audit) : ControllerBase
+public class LoansController(HrisDbContext db, ApprovalService approvals, AuditService audit, PayrollDeductionService deductions) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] string? type, [FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 25)
@@ -95,6 +95,7 @@ public class LoansController(HrisDbContext db, ApprovalService approvals, AuditS
         db.Loans.Add(input);
         audit.Log(AuditCategory.RecordChange, $"Added {input.Type} for employee #{input.EmployeeId} (₱{input.Principal:n2})", nameof(Loan));
         await db.SaveChangesAsync();
+        await deductions.SyncLoanDeductionsAsync(input.EmployeeId);
         return Ok(input);
     }
 

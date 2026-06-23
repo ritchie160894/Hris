@@ -10,8 +10,21 @@ import { AuthService } from '../core/auth.service';
   styles: [`
     .slip { font-size: 13.5px;
       .sec { font-weight: 700; margin: 14px 0 6px; color: var(--text-soft); text-transform: uppercase; font-size: 11.5px; letter-spacing: .05em; }
-      .ln { display: flex; justify-content: space-between; padding: 3px 0; }
+      .ln { display: flex; justify-content: space-between; padding: 3px 0; gap: 8px; }
+      .ln span:first-child { flex: 1; }
       .tot { border-top: 2px solid var(--text); margin-top: 8px; padding-top: 8px; font-weight: 800; font-size: 16px; }
+    }
+    .modal.receipt {
+      max-width: 300px; padding: 14px 12px; margin: 0 auto;
+      .modal-title { font-size: 14px; text-align: center; margin-bottom: 10px; }
+      .slip { font-size: 12px;
+        .sec { margin: 10px 0 4px; font-size: 10.5px; }
+        .tot { font-size: 14px; }
+      }
+      .modal-actions { flex-wrap: wrap; justify-content: center; }
+    }
+    @media print {
+      .modal.receipt { max-width: 80mm; width: 80mm; padding: 8mm 4mm; box-shadow: none; }
     }
     .pagination { display: flex; align-items: center; gap: 10px; padding: 12px 0 0; font-size: 13px; color: var(--text-soft); flex-wrap: wrap; }
     .btn.danger { color: var(--danger); }
@@ -175,7 +188,7 @@ import { AuthService } from '../core/auth.service';
 
       @if (slip()) {
         <div class="modal-backdrop" (click)="slip.set(null)">
-          <div class="modal printable" (click)="$event.stopPropagation()">
+          <div class="modal printable receipt" (click)="$event.stopPropagation()">
             <div class="modal-title">Payslip — {{ slip()!.employee?.firstName }} {{ slip()!.employee?.lastName }}</div>
             <div class="slip">
               <div class="muted small">{{ slip()!.payrollCutoff?.name }} · Pay date {{ slip()!.payrollCutoff?.payDate }} · {{ slip()!.employee?.position?.title }}</div>
@@ -190,11 +203,12 @@ import { AuthService } from '../core/auth.service';
               <div class="ln"><span>PhilHealth</span><b>{{ slip()!.philHealthEmployee | number:'1.2-2' }}</b></div>
               <div class="ln"><span>Pag-IBIG</span><b>{{ slip()!.pagIbigEmployee | number:'1.2-2' }}</b></div>
               <div class="ln"><span>Withholding Tax</span><b>{{ slip()!.withholdingTax | number:'1.2-2' }}</b></div>
-              <div class="ln"><span>Loan Deductions</span><b>{{ slip()!.loanDeductions | number:'1.2-2' }}</b></div>
+              <div class="ln"><span>Cash Advance</span><b>{{ slipDeductionAmount('CASH_ADVANCE') | number:'1.2-2' }}</b></div>
+              <div class="ln"><span>Company Loan</span><b>{{ slipDeductionAmount('COMPANY_LOAN') | number:'1.2-2' }}</b></div>
               @if (slip()!.otherDeductions > 0) {
                 <div class="ln"><span>Other Deductions</span><b>{{ slip()!.otherDeductions | number:'1.2-2' }}</b></div>
               }
-              @for (ln of slipDeductionLines(); track $index) {
+              @for (ln of slipOtherDeductionLines(); track $index) {
                 <div class="ln muted small"><span>{{ ln.name }}</span><b>{{ ln.amount | number:'1.2-2' }}</b></div>
               }
               <div class="ln"><span>Absences ({{ slip()!.daysAbsent }} day/s)</span><b>{{ slip()!.absenceDeduction | number:'1.2-2' }}</b></div>
@@ -395,14 +409,26 @@ export class PayrollComponent implements OnInit {
     });
   }
 
-  slipDeductionLines(): { name: string; amount: number }[] {
+  slipDeductionAmount(code: string): number {
+    return this.slipDetailLines()
+      .filter(x => x.type === 'deduction' && x.code === code)
+      .reduce((s, x) => s + (x.amount ?? 0), 0);
+  }
+
+  slipOtherDeductionLines(): { name: string; amount: number }[] {
+    return this.slipDetailLines()
+      .filter(x => x.type === 'deduction' && x.code !== 'CASH_ADVANCE' && x.code !== 'COMPANY_LOAN')
+      .map(x => ({ name: x.name, amount: x.amount }));
+  }
+
+  private slipDetailLines(): { type: string; code?: string; name: string; amount: number }[] {
     const slip = this.slip();
     if (!slip?.detailsJson) return [];
     try {
       const parsed = JSON.parse(slip.detailsJson);
-      return (Array.isArray(parsed) ? parsed : [])
-        .filter((x: any) => x.type === 'deduction')
-        .map((x: any) => ({ name: x.name, amount: x.amount }));
+      return (Array.isArray(parsed) ? parsed : []).map((x: any) => ({
+        type: x.type, code: x.code, name: x.name, amount: x.amount ?? 0
+      }));
     } catch { return []; }
   }
 

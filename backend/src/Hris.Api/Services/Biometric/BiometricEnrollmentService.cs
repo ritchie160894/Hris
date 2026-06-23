@@ -26,6 +26,13 @@ public class BiometricEnrollmentService(
                            .FirstOrDefaultAsync(d => d.Id == deviceId && d.IsActive, ct)
                        ?? throw new InvalidOperationException("Device not found or inactive.");
 
+        var provider = config["Biometric:Provider"] ?? "Gateway";
+        var isSimulated = string.Equals(provider, "Simulated", StringComparison.OrdinalIgnoreCase);
+
+        if (!isSimulated && !IsDeviceOnline(device))
+            throw new InvalidOperationException(
+                "Device is offline. Ensure the SenseFace device is powered on, connected to the network, and the site gateway is running before starting enrollment.");
+
         employee.BiometricUserId ??= employee.EmployeeCode;
 
         var active = await db.BiometricEnrollments.AnyAsync(e =>
@@ -53,15 +60,17 @@ public class BiometricEnrollmentService(
             nameof(BiometricEnrollment));
         await db.SaveChangesAsync(ct);
 
-        var provider = config["Biometric:Provider"] ?? "Gateway";
-        if (string.Equals(provider, "Simulated", StringComparison.OrdinalIgnoreCase))
+        if (isSimulated)
             _ = Task.Run(() => CompleteSimulatedAsync(enrollment.Id));
-
-        if (adapter.SupportsDirectEnrollment)
+        else if (adapter.SupportsDirectEnrollment)
             _ = Task.Run(() => TryDirectEnrollmentAsync(enrollment.Id));
 
         return enrollment;
     }
+
+    private static bool IsDeviceOnline(BiometricDevice device) =>
+        device.Status == DeviceStatus.Online
+        || (device.LastSeenAt.HasValue && device.LastSeenAt > DateTime.UtcNow.AddMinutes(-5));
 
     private async Task CompleteSimulatedAsync(int enrollmentId)
     {

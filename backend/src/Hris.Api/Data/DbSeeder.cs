@@ -182,7 +182,7 @@ public static class DbSeeder
         db.AddRange(
             new Benefit { Name = "HMO - Maxicare Gold", Type = BenefitType.Hmo, Provider = "Maxicare", MonthlyCost = 2500 },
             new Benefit { Name = "Rice Allowance", Type = BenefitType.Allowance, MonthlyCost = 2000 },
-            new Benefit { Name = "13th Month Pay", Type = BenefitType.Bonus });
+            new Benefit { Name = "13th Month Pay", Type = BenefitType.Bonus, IsThirteenthMonth = true, Description = "Mandatory benefit (PD 851): total basic salary earned in the year ÷ 12, accrued each payroll." });
 
         // ---- Sample attendance for the past 5 working days ----
         var rnd = new Random(42);

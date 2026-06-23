@@ -246,6 +246,8 @@ public class EmployeesController(HrisDbContext db, AuditService audit, IWebHostE
         var emp = await db.Employees.FindAsync(id);
         if (emp is null) return NotFound();
 
+        await deductions.SyncLoanDeductionsAsync(id);
+
         var items = await db.EmployeeDeductions
             .Include(d => d.DeductionType)
             .Include(d => d.Loan)
@@ -331,16 +333,6 @@ public class EmployeesController(HrisDbContext db, AuditService audit, IWebHostE
         d.IsProfileEnabled = false;
         await db.SaveChangesAsync();
         return Ok();
-    }
-
-    [HttpPost("{id:int}/deductions/sync-loans")]
-    [Authorize(Roles = $"{nameof(UserRole.SuperAdministrator)},{nameof(UserRole.HrAdministrator)},{nameof(UserRole.PayrollOfficer)}")]
-    public async Task<IActionResult> SyncLoanDeductions(int id)
-    {
-        if (!await db.Employees.AnyAsync(e => e.Id == id)) return NotFound();
-        await deductions.SyncLoanDeductionsAsync(id);
-        audit.Log(AuditCategory.Payroll, $"Synced loan deductions for employee #{id}", nameof(Employee), id.ToString());
-        return Ok(new { message = "Active loans synced to recurring deductions." });
     }
 
     [HttpPost("{id:int}/deductions/apply-template/{templateId:int}")]

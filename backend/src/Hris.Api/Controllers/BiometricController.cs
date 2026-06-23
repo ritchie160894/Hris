@@ -13,8 +13,25 @@ namespace Hris.Api.Controllers;
 [Authorize]
 public class BiometricController(
     HrisDbContext db,
-    BiometricEnrollmentService enrollmentService) : ControllerBase
+    BiometricEnrollmentService enrollmentService,
+    IConfiguration config) : ControllerBase
 {
+    [HttpGet("config")]
+    [Authorize(Roles = $"{nameof(UserRole.SuperAdministrator)},{nameof(UserRole.HrAdministrator)},{nameof(UserRole.HrOfficer)}")]
+    public IActionResult BiometricConfig()
+    {
+        var provider = config["Biometric:Provider"] ?? "Gateway";
+        var simulated = string.Equals(provider, "Simulated", StringComparison.OrdinalIgnoreCase);
+        return Ok(new
+        {
+            provider,
+            simulated,
+            message = simulated
+                ? "Simulated mode: templates are auto-created without a device scan (development only)."
+                : "Gateway mode: employee must scan face or fingerprint at an online device."
+        });
+    }
+
     [HttpGet("devices")]
     [Authorize(Roles = $"{nameof(UserRole.SuperAdministrator)},{nameof(UserRole.HrAdministrator)},{nameof(UserRole.HrOfficer)}")]
     public async Task<IActionResult> Devices([FromQuery] int? siteId)
@@ -99,12 +116,17 @@ public class BiometricController(
         {
             var enrollment = await enrollmentService.StartAsync(
                 req.EmployeeId, req.DeviceId, (BiometricTemplateType)req.Type, req.FingerIndex, User.DisplayName());
+            var provider = config["Biometric:Provider"] ?? "Gateway";
+            var simulated = string.Equals(provider, "Simulated", StringComparison.OrdinalIgnoreCase);
             return Ok(new
             {
                 enrollment.Id,
                 status = enrollment.Status.ToString(),
                 enrollment.ExpiresAt,
-                message = "Enrollment started. Employee should scan at the selected SenseFace device."
+                simulated,
+                message = simulated
+                    ? "Simulated enrollment started — a fake template will be created in a few seconds (development only)."
+                    : "Enrollment started. The employee must scan at the selected SenseFace device. This page will update when capture completes."
             });
         }
         catch (InvalidOperationException ex)

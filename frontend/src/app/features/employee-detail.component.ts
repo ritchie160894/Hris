@@ -149,6 +149,9 @@ import { environment } from '../../environments/environment';
             @if (auth.isHr()) {
               @if (enrollMessage()) { <div class="alert success">{{ enrollMessage() }}</div> }
               @if (enrollError()) { <div class="alert error">{{ enrollError() }}</div> }
+              @if (biometricConfig()?.simulated) {
+                <div class="alert warning">Development mode: biometric provider is Simulated — enrollments complete without a device scan.</div>
+              }
 
               <div class="bio-actions">
                 <label class="field">
@@ -174,11 +177,20 @@ import { environment } from '../../environments/environment';
                     </select>
                   </label>
                 }
-                <button class="btn" [disabled]="enrollBusy() || !enrollForm.deviceId" (click)="startEnrollment()">
+                <button class="btn" [disabled]="!canStartEnrollment()" (click)="startEnrollment()">
                   {{ enrollBusy() ? 'Starting…' : 'Start Enrollment' }}
                 </button>
               </div>
-              <div class="muted small mt">After starting, the employee scans at the device. In dev mode (Simulated provider), templates are created automatically in a few seconds.</div>
+              @if (!biometricConfig()?.simulated && enrollForm.deviceId && !selectedEnrollDeviceOnline()) {
+                <div class="alert error mt">Selected device is offline. Connect the device and ensure the site gateway is running before enrolling.</div>
+              }
+              <div class="muted small mt">
+                @if (biometricConfig()?.simulated) {
+                  Simulated provider: templates are created automatically without a physical scan.
+                } @else {
+                  After starting, the employee must scan face or fingerprint at the online device. Enrollment completes only after the device captures the template.
+                }
+              </div>
 
               @if (enrollments().length) {
                 <div class="card-title mt">Recent Enrollment Sessions</div>
@@ -200,7 +212,6 @@ import { environment } from '../../environments/environment';
             <div class="card-title row" style="justify-content:space-between">
               <span>Recurring Deductions</span>
               <div class="row" style="gap:6px">
-                <button class="btn secondary sm" (click)="syncLoanDeductions()">Sync from Loans</button>
                 @if (deductionTemplates().length) {
                   <select class="ctl sm" [(ngModel)]="selectedTemplateId">
                     <option [ngValue]="null">Apply template…</option>
@@ -277,6 +288,7 @@ export class EmployeeDetailComponent implements OnInit, OnDestroy {
   enrollMessage = signal('');
   enrollError = signal('');
   enrollBusy = signal(false);
+  biometricConfig = signal<{ simulated: boolean; message?: string } | null>(null);
   newContact: any = {};
   enrollForm: any = { type: 1, fingerIndex: 0, deviceId: null };
   employeeDeductions = signal<any[]>([]);
@@ -311,6 +323,7 @@ export class EmployeeDetailComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.load();
     this.loadEnrollments();
+    this.loadBiometricConfig();
     if (this.auth.isPayroll() || this.auth.isHr()) this.loadDeductionMeta();
   }
 
@@ -340,6 +353,24 @@ export class EmployeeDetailComponent implements OnInit, OnDestroy {
     });
   }
 
+  loadBiometricConfig(): void {
+    this.api.get<any>('biometric/config').subscribe({
+      next: c => this.biometricConfig.set(c),
+      error: () => this.biometricConfig.set({ simulated: false })
+    });
+  }
+
+  selectedEnrollDeviceOnline(): boolean {
+    const d = this.devices().find(x => x.id === this.enrollForm.deviceId);
+    return !!d?.online;
+  }
+
+  canStartEnrollment(): boolean {
+    if (this.enrollBusy() || !this.enrollForm.deviceId) return false;
+    if (this.biometricConfig()?.simulated) return true;
+    return this.selectedEnrollDeviceOnline();
+  }
+
   loadEnrollments(): void {
     this.api.get<any[]>('biometric/enrollments', { employeeId: this.id, take: 8 }).subscribe({
       next: r => this.enrollments.set(r),
@@ -362,7 +393,7 @@ export class EmployeeDetailComponent implements OnInit, OnDestroy {
         this.enrollBusy.set(false);
         this.enrollMessage.set(res.message ?? 'Enrollment started.');
         this.loadEnrollments();
-        this.pollUntilDone(res.id);
+        this.pollUntilDone(res.id, !res.simulated);
       },
       error: err => {
         this.enrollBusy.set(false);
@@ -371,7 +402,7 @@ export class EmployeeDetailComponent implements OnInit, OnDestroy {
     });
   }
 
-  pollUntilDone(enrollmentId: number): void {
+  pollUntilDone(enrollmentId: number, gatewayMode = false): void {
     if (this.pollTimer) clearInterval(this.pollTimer);
     let attempts = 0;
     this.pollTimer = setInterval(() => {
@@ -379,16 +410,24 @@ export class EmployeeDetailComponent implements OnInit, OnDestroy {
       this.api.get<any>(`biometric/enrollments/${enrollmentId}`).subscribe({
         next: s => {
           this.loadEnrollments();
+          if (s.statusName === 'WaitingOnDevice' || s.statusName === 'Pending') {
+            if (gatewayMode) this.enrollMessage.set('Waiting for employee to scan at the device…');
+          }
           if (['Completed', 'Failed', 'Cancelled', 'Expired'].includes(s.statusName)) {
             clearInterval(this.pollTimer!);
             this.pollTimer = undefined;
             this.load();
             if (s.statusName === 'Completed') this.enrollMessage.set('Enrollment completed successfully.');
             else if (s.errorMessage) this.enrollError.set(s.errorMessage);
+            else if (s.statusName === 'Expired') this.enrollError.set('Enrollment timed out — no scan was received from the device.');
           }
         }
       });
-      if (attempts > 40) { clearInterval(this.pollTimer!); this.pollTimer = undefined; }
+      if (attempts > 120) {
+        clearInterval(this.pollTimer!);
+        this.pollTimer = undefined;
+        this.enrollError.set('Enrollment timed out waiting for the device.');
+      }
     }, 3000);
   }
 
@@ -492,13 +531,6 @@ export class EmployeeDetailComponent implements OnInit, OnDestroy {
   removeDeduction(id: number): void {
     if (!confirm('Remove this recurring deduction?')) return;
     this.api.delete(`employees/${this.id}/deductions/${id}`).subscribe(() => this.loadDeductions());
-  }
-
-  syncLoanDeductions(): void {
-    this.api.post(`employees/${this.id}/deductions/sync-loans`, {}).subscribe({
-      next: () => { this.loadDeductions(); this.deductionSaved.set(true); setTimeout(() => this.deductionSaved.set(false), 3000); },
-      error: err => this.deductionError.set(err?.error?.message ?? 'Sync failed.')
-    });
   }
 
   applyTemplate(): void {

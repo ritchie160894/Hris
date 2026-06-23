@@ -169,10 +169,6 @@ public class OrganizationController(HrisDbContext db, AuditService audit) : Cont
         if (d.HeadEmployeeId.HasValue)
             d.HeadEmployeeId = null;
 
-        var jobCount = await db.JobPostings.CountAsync(j => j.DepartmentId == id);
-        if (jobCount > 0)
-            return BadRequest(new { message = $"Cannot delete: {jobCount} job posting(s) reference this department." });
-
         db.Departments.Remove(d);
         audit.Log(AuditCategory.RecordChange, $"Deleted department {d.Name}", nameof(Department), id.ToString());
         await db.SaveChangesAsync();
@@ -235,10 +231,6 @@ public class OrganizationController(HrisDbContext db, AuditService audit) : Cont
             e.PositionId = null;
             e.UpdatedAt = DateTime.UtcNow;
         }
-
-        var jobCount = await db.JobPostings.CountAsync(j => j.PositionId == id);
-        if (jobCount > 0)
-            return BadRequest(new { message = $"Cannot delete: {jobCount} job posting(s) reference this position." });
 
         db.Positions.Remove(p);
         audit.Log(AuditCategory.RecordChange, $"Deleted position {p.Title}", nameof(Position), id.ToString());

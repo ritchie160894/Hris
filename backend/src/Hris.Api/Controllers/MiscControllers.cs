@@ -80,6 +80,20 @@ public class BenefitsController(HrisDbContext db) : ControllerBase
     [Authorize(Roles = HrRoles)]
     public async Task<IActionResult> Create(Benefit b) { db.Benefits.Add(b); await db.SaveChangesAsync(); return Ok(b); }
 
+    [HttpDelete("{id:int}")]
+    [Authorize(Roles = HrRoles)]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var b = await db.Benefits.FindAsync(id);
+        if (b is null || !b.IsActive) return NotFound();
+        var hasAssignments = await db.EmployeeBenefits.AnyAsync(e => e.BenefitId == id);
+        if (hasAssignments)
+            return BadRequest(new { message = "Remove all employee assignments for this benefit before deleting it." });
+        b.IsActive = false;
+        await db.SaveChangesAsync();
+        return Ok(new { message = "Benefit deleted." });
+    }
+
     [HttpGet("assignments")]
     public async Task<IActionResult> Assignments([FromQuery] int? employeeId)
     {
@@ -113,109 +127,6 @@ public class BenefitsController(HrisDbContext db) : ControllerBase
         db.EmployeeBenefits.Remove(e);
         await db.SaveChangesAsync();
         return Ok();
-    }
-}
-
-// ---------------- Recruitment ----------------
-
-[ApiController]
-[Route("api/recruitment")]
-[Authorize]
-public class RecruitmentController(HrisDbContext db) : ControllerBase
-{
-    private const string HrRoles = $"{nameof(UserRole.SuperAdministrator)},{nameof(UserRole.HrAdministrator)},{nameof(UserRole.HrOfficer)}";
-
-    [HttpGet("postings")]
-    public async Task<IActionResult> Postings() =>
-        Ok(await db.JobPostings.Include(p => p.Department).Include(p => p.Position)
-            .OrderByDescending(p => p.CreatedAt)
-            .Select(p => new
-            {
-                p.Id, p.Title, p.Description, p.Requirements, p.Vacancies, status = p.Status.ToString(),
-                p.PostedDate, p.ClosingDate, department = p.Department!.Name, position = p.Position!.Title,
-                applicantCount = p.Applicants.Count
-            }).ToListAsync());
-
-    [HttpPost("postings")]
-    [Authorize(Roles = HrRoles)]
-    public async Task<IActionResult> CreatePosting(JobPosting p)
-    {
-        p.Department = null; p.Position = null;
-        db.JobPostings.Add(p);
-        await db.SaveChangesAsync();
-        return Ok(p);
-    }
-
-    [HttpPut("postings/{id:int}")]
-    [Authorize(Roles = HrRoles)]
-    public async Task<IActionResult> UpdatePosting(int id, JobPosting input)
-    {
-        var p = await db.JobPostings.FindAsync(id);
-        if (p is null) return NotFound();
-        p.Title = input.Title; p.Description = input.Description; p.Requirements = input.Requirements;
-        p.Vacancies = input.Vacancies; p.Status = input.Status; p.PostedDate = input.PostedDate;
-        p.ClosingDate = input.ClosingDate; p.DepartmentId = input.DepartmentId; p.PositionId = input.PositionId;
-        await db.SaveChangesAsync();
-        return Ok(p);
-    }
-
-    [HttpGet("applicants")]
-    public async Task<IActionResult> Applicants([FromQuery] int? postingId)
-    {
-        var q = db.Applicants.Include(a => a.JobPosting).Include(a => a.Interviews).AsQueryable();
-        if (postingId.HasValue) q = q.Where(a => a.JobPostingId == postingId);
-        return Ok(await q.OrderByDescending(a => a.CreatedAt)
-            .Select(a => new
-            {
-                a.Id, a.FirstName, a.LastName, a.Email, a.ContactNumber, status = a.Status.ToString(), a.Notes,
-                posting = a.JobPosting!.Title, a.JobPostingId,
-                interviews = a.Interviews.Select(i => new { i.Id, i.ScheduledAt, i.InterviewerName, i.Location, i.Result, i.IsCompleted })
-            }).ToListAsync());
-    }
-
-    [HttpPost("applicants")]
-    [Authorize(Roles = HrRoles)]
-    public async Task<IActionResult> AddApplicant(Applicant a)
-    {
-        a.JobPosting = null;
-        db.Applicants.Add(a);
-        await db.SaveChangesAsync();
-        return Ok(a);
-    }
-
-    [HttpPut("applicants/{id:int}/status")]
-    [Authorize(Roles = HrRoles)]
-    public async Task<IActionResult> SetApplicantStatus(int id, [FromBody] StatusUpdate req)
-    {
-        var a = await db.Applicants.FindAsync(id);
-        if (a is null) return NotFound();
-        if (Enum.TryParse<ApplicantStatus>(req.Status, out var st)) a.Status = st;
-        a.Notes = req.Notes ?? a.Notes;
-        await db.SaveChangesAsync();
-        return Ok(a);
-    }
-    public record StatusUpdate(string Status, string? Notes);
-
-    [HttpPost("interviews")]
-    [Authorize(Roles = HrRoles)]
-    public async Task<IActionResult> ScheduleInterview(Interview i)
-    {
-        i.Applicant = null;
-        db.Interviews.Add(i);
-        await db.SaveChangesAsync();
-        return Ok(i);
-    }
-
-    [HttpPut("interviews/{id:int}")]
-    [Authorize(Roles = HrRoles)]
-    public async Task<IActionResult> UpdateInterview(int id, Interview input)
-    {
-        var i = await db.Interviews.FindAsync(id);
-        if (i is null) return NotFound();
-        i.ScheduledAt = input.ScheduledAt; i.InterviewerName = input.InterviewerName;
-        i.Location = input.Location; i.Result = input.Result; i.Feedback = input.Feedback; i.IsCompleted = input.IsCompleted;
-        await db.SaveChangesAsync();
-        return Ok(i);
     }
 }
 

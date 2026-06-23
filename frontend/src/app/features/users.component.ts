@@ -80,7 +80,7 @@ import { AuthService } from '../core/auth.service';
             <tr><td><span class="badge">Super Administrator</span></td><td>Full system access including users, audit, devices and sync.</td></tr>
             <tr><td><span class="badge">HR Administrator</span></td><td>All HR modules, organization setup, reports, audit.</td></tr>
             <tr><td><span class="badge">Payroll Officer</span></td><td>Payroll processing, loans, government contributions, payroll reports. No approvals.</td></tr>
-            <tr><td><span class="badge">HR Officer</span></td><td>Employee records, leave/OT review (level 2 approver), recruitment, training.</td></tr>
+            <tr><td><span class="badge">HR Officer</span></td><td>Employee records, leave/OT review (level 2 approver), training.</td></tr>
             <tr><td><span class="badge">Department Head</span></td><td>Own department employees and requests; level 1 approver.</td></tr>
             <tr><td><span class="badge">Vice President & HR Head</span></td><td>Executive portal: approves leave/SIL/OT/loans/cash advances and payroll. No payroll processing.</td></tr>
             <tr><td><span class="badge">President & CEO</span></td><td>Executive portal: final approvals for leave and SIL only.</td></tr>

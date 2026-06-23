@@ -13,7 +13,7 @@ import { ApiService } from '../core/api.service';
   template: `
     <div class="page">
       <div class="page-header">
-        <div><h1>Notifications</h1><div class="sub">{{ unread() }} unread</div></div>
+        <div><h1>Notifications</h1><div class="sub">{{ unread() }} unread · auto-removed after 7 days</div></div>
         <div class="row">
           <button class="btn secondary" (click)="markAll()">Mark all as read</button>
           <button class="btn secondary" (click)="deleteRead()">Clear read</button>

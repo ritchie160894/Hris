@@ -68,11 +68,13 @@ import { AuthService } from '../core/auth.service';
               </tbody>
             </table>
           </div>
-          @if (requestTotal() > requestPageSize) {
+          @if (requestTotal() > 0) {
             <div class="pagination">
-              <span>Page {{ requestPage() }} of {{ requestTotalPages() }} · {{ requestTotal() }} record(s) · {{ requestPageSize }} rows/page</span>
-              <button class="btn secondary sm" [disabled]="requestPage() <= 1" (click)="requestPage.set(requestPage() - 1); loadRequests()">Previous</button>
-              <button class="btn secondary sm" [disabled]="requestPage() >= requestTotalPages()" (click)="requestPage.set(requestPage() + 1); loadRequests()">Next</button>
+              <span>{{ requestTotal() }} record(s)@if (requestTotal() > requestPageSize) { · Page {{ requestPage() }} of {{ requestTotalPages() }} · {{ requestPageSize }} rows/page }</span>
+              @if (requestTotal() > requestPageSize) {
+                <button class="btn secondary sm" [disabled]="requestPage() <= 1" (click)="requestPage.set(requestPage() - 1); loadRequests()">Previous</button>
+                <button class="btn secondary sm" [disabled]="requestPage() >= requestTotalPages()" (click)="requestPage.set(requestPage() + 1); loadRequests()">Next</button>
+              }
             </div>
           }
         </div>

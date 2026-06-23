@@ -6,6 +6,9 @@ import { AuthService } from '../core/auth.service';
 @Component({
   selector: 'app-announcements',
   imports: [FormsModule],
+  styles: [`
+    .pagination { display: flex; align-items: center; gap: 10px; padding: 12px 0 0; font-size: 13px; color: var(--text-soft); flex-wrap: wrap; }
+  `],
   template: `
     <div class="page">
       <div class="page-header">
@@ -26,6 +29,16 @@ import { AuthService } from '../core/auth.service';
           <div class="muted small">Posted {{ a.publishDate }} by {{ a.postedByName }}</div>
         </div>
       } @empty { <div class="card"><div class="empty">No announcements</div></div> }
+
+      @if (total() > 0) {
+        <div class="pagination">
+          <span>{{ total() }} announcement(s)@if (total() > pageSize) { · Page {{ page() }} of {{ totalPages() }} · {{ pageSize }} per page }</span>
+          @if (total() > pageSize) {
+            <button class="btn secondary sm" [disabled]="page() <= 1" (click)="page.set(page() - 1); load()">Previous</button>
+            <button class="btn secondary sm" [disabled]="page() >= totalPages()" (click)="page.set(page() + 1); load()">Next</button>
+          }
+        </div>
+      }
 
       @if (showNew()) {
         <div class="modal-backdrop" (click)="showNew.set(false)">
@@ -52,6 +65,9 @@ import { AuthService } from '../core/auth.service';
 })
 export class AnnouncementsComponent implements OnInit {
   items = signal<any[]>([]);
+  page = signal(1);
+  total = signal(0);
+  readonly pageSize = 25;
   showNew = signal(false);
   form: any = {};
 
@@ -59,7 +75,16 @@ export class AnnouncementsComponent implements OnInit {
 
   ngOnInit(): void { this.load(); }
 
-  load(): void { this.api.get<any[]>('announcements').subscribe(r => this.items.set(r)); }
+  load(): void {
+    this.api.get<{ total: number; items: any[] }>('announcements', {
+      page: this.page(), pageSize: this.pageSize
+    }).subscribe(r => {
+      this.items.set(r.items ?? []);
+      this.total.set(r.total ?? 0);
+    });
+  }
+
+  totalPages(): number { return Math.max(1, Math.ceil(this.total() / this.pageSize)); }
 
   typeName(t: number): string { return ({ 1: 'Announcement', 2: 'Memo', 3: 'Event', 4: 'Holiday Notice' } as any)[t] ?? t; }
   badge(t: number): string { return ({ 1: 'info', 2: 'muted', 3: 'success', 4: 'danger' } as any)[t] ?? 'muted'; }

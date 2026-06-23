@@ -256,10 +256,16 @@ public class TrainingController(HrisDbContext db) : ControllerBase
 public class AnnouncementsController(HrisDbContext db, NotificationService notifications) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> List() =>
-        Ok(await db.Announcements.Where(a => a.IsActive)
-            .OrderByDescending(a => a.IsPinned).ThenByDescending(a => a.PublishDate)
-            .ToListAsync());
+    public async Task<IActionResult> List([FromQuery] int page = 1, [FromQuery] int pageSize = 25)
+    {
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var q = db.Announcements.Where(a => a.IsActive);
+        var total = await q.CountAsync();
+        var items = await q.OrderByDescending(a => a.IsPinned).ThenByDescending(a => a.PublishDate)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .ToListAsync();
+        return Ok(new { total, page, pageSize, items });
+    }
 
     [HttpPost]
     [Authorize(Roles = $"{nameof(UserRole.SuperAdministrator)},{nameof(UserRole.HrAdministrator)},{nameof(UserRole.HrOfficer)}")]

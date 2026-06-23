@@ -7,6 +7,7 @@ const ADMIN = ['SuperAdministrator', 'HrAdministrator'];
 // intentionally excluded from these role lists.
 const HR = ['SuperAdministrator', 'HrAdministrator', 'HrOfficer'];
 const PAYROLL = ['SuperAdministrator', 'HrAdministrator', 'PayrollOfficer'];
+const BENEFITS = ['SuperAdministrator', 'HrAdministrator', 'HrOfficer', 'PayrollOfficer'];
 const MANAGERS = ['SuperAdministrator', 'HrAdministrator', 'HrOfficer', 'DepartmentHead', 'Supervisor', 'PayrollOfficer'];
 const REPORTS = ['SuperAdministrator', 'HrAdministrator', 'HrOfficer', 'PayrollOfficer', 'DepartmentHead'];
 
@@ -30,7 +31,7 @@ export const routes: Routes = [
       { path: 'payroll', canActivate: [roleGuard(...PAYROLL)], loadComponent: () => import('./features/payroll.component').then(m => m.PayrollComponent) },
       { path: 'loans', canActivate: [nonExecGuard], loadComponent: () => import('./features/loans.component').then(m => m.LoansComponent) },
       { path: 'government', canActivate: [roleGuard(...PAYROLL)], loadComponent: () => import('./features/government.component').then(m => m.GovernmentComponent) },
-      { path: 'benefits', canActivate: [nonExecGuard], loadComponent: () => import('./features/benefits.component').then(m => m.BenefitsComponent) },
+      { path: 'benefits', canActivate: [roleGuard(...BENEFITS)], loadComponent: () => import('./features/benefits.component').then(m => m.BenefitsComponent) },
       { path: 'performance', canActivate: [roleGuard(...MANAGERS)], loadComponent: () => import('./features/performance.component').then(m => m.PerformanceComponent) },
       { path: 'training', canActivate: [roleGuard(...HR)], loadComponent: () => import('./features/training.component').then(m => m.TrainingComponent) },
       { path: 'documents', canActivate: [nonExecGuard], loadComponent: () => import('./features/documents.component').then(m => m.DocumentsComponent) },

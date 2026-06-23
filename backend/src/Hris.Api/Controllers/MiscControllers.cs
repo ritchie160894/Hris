@@ -72,8 +72,10 @@ public class GovernmentController(HrisDbContext db) : ControllerBase
 public class BenefitsController(HrisDbContext db) : ControllerBase
 {
     private const string HrRoles = $"{nameof(UserRole.SuperAdministrator)},{nameof(UserRole.HrAdministrator)},{nameof(UserRole.HrOfficer)}";
+    private const string BenefitsRoles = $"{HrRoles},{nameof(UserRole.PayrollOfficer)}";
 
     [HttpGet]
+    [Authorize(Roles = BenefitsRoles)]
     public async Task<IActionResult> List() => Ok(await db.Benefits.Where(b => b.IsActive).ToListAsync());
 
     [HttpPost]
@@ -95,11 +97,11 @@ public class BenefitsController(HrisDbContext db) : ControllerBase
     }
 
     [HttpGet("assignments")]
+    [Authorize(Roles = BenefitsRoles)]
     public async Task<IActionResult> Assignments([FromQuery] int? employeeId)
     {
         var q = db.EmployeeBenefits.Include(e => e.Benefit).Include(e => e.Employee).AsQueryable();
-        if (User.Role() == UserRole.Employee) q = q.Where(e => e.EmployeeId == User.EmployeeId());
-        else if (employeeId.HasValue) q = q.Where(e => e.EmployeeId == employeeId);
+        if (employeeId.HasValue) q = q.Where(e => e.EmployeeId == employeeId);
         return Ok(await q.Select(e => new
         {
             e.Id, e.EffectiveDate, e.EndDate, e.PolicyNumber, e.Notes,

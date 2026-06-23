@@ -174,7 +174,7 @@ export class ShellComponent {
         { label: 'Payroll', icon: '₱', link: '/payroll', roles: ['SuperAdministrator', 'HrAdministrator', 'PayrollOfficer'] },
         { label: 'Loans & Advances', icon: '💳', link: '/loans', roles: ShellComponent.STAFF },
         { label: 'Government', icon: '🏛', link: '/government', roles: ['SuperAdministrator', 'HrAdministrator', 'PayrollOfficer'] },
-        { label: 'Benefits', icon: '🎁', link: '/benefits', roles: ShellComponent.STAFF }
+        { label: 'Benefits', icon: '🎁', link: '/benefits', roles: ['SuperAdministrator', 'HrAdministrator', 'HrOfficer', 'PayrollOfficer'] }
       ]
     },
     {
